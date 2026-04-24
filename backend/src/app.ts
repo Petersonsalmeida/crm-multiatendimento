@@ -4,6 +4,7 @@ import pinoHttp from 'pino-http';
 import { logger } from '@/shared/logger';
 import { errorHandler, notFoundHandler } from '@/shared/errors';
 import { healthRouter } from '@/modules/health/health.routes';
+import { contactsRouter } from '@/modules/contacts/contacts.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -23,6 +24,7 @@ export function createApp(): Express {
   app.use(express.json({ limit: '1mb' }));
 
   app.use('/healthz', healthRouter);
+  app.use('/contacts', contactsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
