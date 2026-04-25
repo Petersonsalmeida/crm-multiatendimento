@@ -27,6 +27,10 @@ const schema = z.object({
   EVOLUTION_API_URL: optionalUrl(),
   EVOLUTION_API_KEY: optionalString(),
   EVOLUTION_INSTANCE_NAME: optionalString(),
+  // Segredo compartilhado entre Evolution API → este backend.
+  // Quando definido, exigimos match no header `apikey` em /webhooks/evolution.
+  // Quando vazio (dev), o endpoint aceita qualquer chamada — útil pra testar com curl.
+  EVOLUTION_WEBHOOK_SECRET: optionalString(),
 
   ANTHROPIC_API_KEY: optionalString(),
   CLAUDE_MODEL: z.string().default('claude-sonnet-4-5'),
