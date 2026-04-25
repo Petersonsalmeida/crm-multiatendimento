@@ -174,3 +174,59 @@ describe('ContactsService.remove', () => {
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 });
+
+describe('ContactsService.ensureByPhone', () => {
+  it('retorna o contato existente sem chamar create', async () => {
+    const existing = makeContact({ id: 'existing' });
+    const repo = makeRepoMock();
+    vi.mocked(repo.findByPhone).mockResolvedValue(existing);
+
+    const service = createContactsService(repo);
+    const result = await service.ensureByPhone({
+      phone: '+55 (51) 99999-0000',
+      fallbackName: 'Outro Nome',
+    });
+
+    expect(result).toBe(existing);
+    expect(repo.findByPhone).toHaveBeenCalledWith('+5551999990000');
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('cria com fallbackName quando contato não existe', async () => {
+    const repo = makeRepoMock();
+    vi.mocked(repo.findByPhone).mockResolvedValue(null);
+    vi.mocked(repo.create).mockImplementation(async (input) =>
+      makeContact({ ...input, id: 'novo' }),
+    );
+
+    const service = createContactsService(repo);
+    const result = await service.ensureByPhone({
+      phone: '+5551988887777',
+      fallbackName: '  João Silva  ',
+    });
+
+    expect(result.id).toBe('novo');
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone: '+5551988887777',
+        name: 'João Silva',
+        source: 'whatsapp',
+      }),
+    );
+  });
+
+  it('usa o telefone como nome quando não há fallbackName', async () => {
+    const repo = makeRepoMock();
+    vi.mocked(repo.findByPhone).mockResolvedValue(null);
+    vi.mocked(repo.create).mockImplementation(async (input) =>
+      makeContact({ ...input, id: 'novo' }),
+    );
+
+    const service = createContactsService(repo);
+    await service.ensureByPhone({ phone: '+5551988887777' });
+
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '+5551988887777' }),
+    );
+  });
+});

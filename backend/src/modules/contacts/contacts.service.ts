@@ -58,6 +58,12 @@ export interface ContactsService {
   create(input: CreateContactInput): Promise<ContactRow>;
   update(id: string, patch: UpdateContactInput): Promise<ContactRow>;
   remove(id: string): Promise<void>;
+  /**
+   * Idempotente: garante existência de um contato pelo telefone.
+   * Usado por integrações inbound (webhooks, importação). Se já existe e
+   * `fallbackName` foi informado, atualiza o nome quando o atual é genérico.
+   */
+  ensureByPhone(input: { phone: string; fallbackName?: string }): Promise<ContactRow>;
 }
 
 export function createContactsService(
@@ -153,6 +159,23 @@ export function createContactsService(
           code: 'contact_not_found',
         });
       }
+    },
+
+    async ensureByPhone({ phone, fallbackName }) {
+      const normalized = normalizePhone(phone);
+      const existing = await repo.findByPhone(normalized);
+      if (existing) return existing;
+
+      const name = (fallbackName ?? '').trim() || normalized;
+      return repo.create({
+        name,
+        phone: normalized,
+        email: null,
+        company: null,
+        notes: null,
+        source: 'whatsapp',
+        tags: [],
+      });
     },
   };
 }
