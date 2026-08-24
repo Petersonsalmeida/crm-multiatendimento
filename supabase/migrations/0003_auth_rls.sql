@@ -42,8 +42,13 @@ as $$
   );
 $$;
 
-revoke execute on function public.is_active_user() from anon;
-revoke execute on function public.is_admin() from anon;
+-- Funções recém-criadas recebem GRANT EXECUTE TO PUBLIC por padrão —
+-- revogar de PUBLIC e reconceder só a authenticated, que precisa poder
+-- chamá-las de dentro das policies abaixo.
+revoke execute on function public.is_active_user() from public;
+revoke execute on function public.is_admin() from public;
+grant execute on function public.is_active_user() to authenticated;
+grant execute on function public.is_admin() to authenticated;
 
 -- ---------------------------------------------------------------------
 -- users — cada um vê o próprio cadastro; admin vê todos.
