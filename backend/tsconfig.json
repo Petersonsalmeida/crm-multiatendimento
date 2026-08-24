@@ -27,5 +27,13 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist"],
+
+  // `tsc` não reescreve os aliases `@/*` no JS emitido e o Node não sabe
+  // resolvê-los em runtime — sem este passo, `node dist/server.js` morre
+  // com ERR_MODULE_NOT_FOUND. `resolveFullPaths` também acrescenta a
+  // extensão `.js`, exigida por ESM no Node.
+  "tsc-alias": {
+    "resolveFullPaths": true
+  }
 }

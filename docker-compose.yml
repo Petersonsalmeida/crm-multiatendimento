@@ -1,0 +1,52 @@
+# =====================================================================
+# AliançaCRM — stack de deploy (VPS Hostinger)
+# =====================================================================
+# Não há serviço de banco aqui: o Postgres é o do Supabase gerenciado.
+#
+# Nenhum container publica 80/443. O VPS já roda Nginx + Certbot no
+# host atendendo n8n.centroautoalianca.com.br e evo.centroautoalianca.
+# com.br — subir outro Nginx nessas portas derrubaria os dois. Aqui os
+# serviços escutam só em 127.0.0.1 e o Nginx do host faz proxy (ver
+# deploy/nginx/crm.centroautoalianca.com.br.conf).
+#
+# Bind em 127.0.0.1 e não 0.0.0.0 também impede que o firewall do
+# provedor seja o único obstáculo entre a internet e a API.
+# =====================================================================
+
+services:
+  backend:
+    build:
+      context: ./backend
+    image: alianca-crm-backend:latest
+    container_name: alianca-crm-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+    ports:
+      - '127.0.0.1:3001:3001'
+    logging: &default-logging
+      driver: json-file
+      options:
+        # Sem limite, o log do Docker enche o disco do VPS com o tempo.
+        max-size: '10m'
+        max-file: '5'
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Build args, não environment: variáveis VITE_* são inlinadas no
+        # bundle durante o build. Mudou uma? Precisa rebuildar a imagem.
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+    image: alianca-crm-frontend:latest
+    container_name: alianca-crm-frontend
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8080:80'
+    depends_on:
+      - backend
+    logging: *default-logging
