@@ -3,17 +3,22 @@ import { getSupabaseAdmin } from '@/shared/supabase';
 import type {
   Channel,
   ConversationRow,
+  ConversationWithContact,
   ListConversationsQuery,
 } from '@/modules/conversations/conversations.types';
 import { openStatusValues } from '@/modules/conversations/conversations.types';
 
 const TABLE = 'conversations';
 
+// Embed do PostgREST pela FK conversations.contact_id → contacts.id.
+// Evita um request por conversa só para exibir nome/telefone na lista.
+const CONTACT_EMBED = '*, contact:contacts(id, name, phone)';
+
 export interface ConversationsRepository {
   list(
     query: ListConversationsQuery,
-  ): Promise<{ items: ConversationRow[]; total: number }>;
-  findById(id: string): Promise<ConversationRow | null>;
+  ): Promise<{ items: ConversationWithContact[]; total: number }>;
+  findById(id: string): Promise<ConversationWithContact | null>;
   findOpenForContact(
     contactId: string,
     channel: Channel,
@@ -34,7 +39,7 @@ export function createConversationsRepository(
 
       let q = client
         .from(TABLE)
-        .select('*', { count: 'exact' })
+        .select(CONTACT_EMBED, { count: 'exact' })
         // Mais recente primeiro — fallback pra created_at quando ainda não
         // chegou mensagem (last_msg_at é null nesse caso).
         .order('last_msg_at', { ascending: false, nullsFirst: false })
@@ -47,17 +52,20 @@ export function createConversationsRepository(
 
       const { data, error, count } = await q;
       if (error) throw error;
-      return { items: (data as ConversationRow[]) ?? [], total: count ?? 0 };
+      return {
+        items: (data as ConversationWithContact[]) ?? [],
+        total: count ?? 0,
+      };
     },
 
     async findById(id) {
       const { data, error } = await client
         .from(TABLE)
-        .select('*')
+        .select(CONTACT_EMBED)
         .eq('id', id)
         .maybeSingle();
       if (error) throw error;
-      return (data as ConversationRow | null) ?? null;
+      return (data as ConversationWithContact | null) ?? null;
     },
 
     async findOpenForContact(contactId, channel) {

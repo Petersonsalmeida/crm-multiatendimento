@@ -6,13 +6,14 @@ import {
 import type {
   Channel,
   ConversationRow,
+  ConversationWithContact,
   ListConversationsQuery,
   PaginatedConversations,
 } from '@/modules/conversations/conversations.types';
 
 export interface ConversationsService {
   list(query: ListConversationsQuery): Promise<PaginatedConversations>;
-  getById(id: string): Promise<ConversationRow>;
+  getById(id: string): Promise<ConversationWithContact>;
   /**
    * Idempotente: devolve a conversa "aberta" mais recente do contato no
    * canal informado, ou cria uma nova com status default `aberta`.
