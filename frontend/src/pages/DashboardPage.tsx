@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/shared/Button';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -20,11 +21,16 @@ export default function DashboardPage() {
           </Button>
         </header>
 
-        <section className="flex flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-border-subtle bg-bg-surface p-12 text-center">
-          <h2 className="text-lg font-medium">Dashboard</h2>
-          <p className="text-sm text-text-muted">
-            Métricas, funil e visão geral chegam nas próximas fases.
-          </p>
+        <section className="flex flex-1 flex-col items-center justify-center gap-4 rounded-lg border border-border-subtle bg-bg-surface p-12 text-center">
+          <div>
+            <h2 className="text-lg font-medium">Dashboard</h2>
+            <p className="text-sm text-text-muted">
+              Métricas, funil e visão geral chegam nas próximas fases.
+            </p>
+          </div>
+          <Link to="/chat">
+            <Button>Abrir atendimento</Button>
+          </Link>
         </section>
       </div>
     </main>

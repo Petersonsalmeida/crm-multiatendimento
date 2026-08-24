@@ -30,6 +30,21 @@ export interface ConversationRow {
   updated_at: string;
 }
 
+/**
+ * Dados do contato embutidos na conversa. A lista de conversas do chat
+ * precisa exibir nome e telefone; sem o embed do PostgREST o frontend
+ * faria uma request por linha (N+1) só para montar a lateral.
+ */
+export interface ContactSummary {
+  id: string;
+  name: string;
+  phone: string;
+}
+
+export interface ConversationWithContact extends ConversationRow {
+  contact: ContactSummary | null;
+}
+
 // ---------------------------------------------------------------------
 // Listagem — query params de GET /conversations
 // ---------------------------------------------------------------------
@@ -54,7 +69,7 @@ export type ConversationIdParam = z.infer<typeof conversationIdParamSchema>;
 // Respostas
 // ---------------------------------------------------------------------
 export interface PaginatedConversations {
-  items: ConversationRow[];
+  items: ConversationWithContact[];
   page: number;
   pageSize: number;
   total: number;
