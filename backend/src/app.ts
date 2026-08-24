@@ -5,7 +5,10 @@ import pinoHttp from 'pino-http';
 import { env, parseCorsOrigins } from '@/env';
 import { logger } from '@/shared/logger';
 import { errorHandler, notFoundHandler } from '@/shared/errors';
-import { requireAuth } from '@/modules/auth/auth.middleware';
+import {
+  createRequireActiveUser,
+  requireAuth,
+} from '@/modules/auth/auth.middleware';
 import { healthRouter } from '@/modules/health/health.routes';
 import { contactsRouter } from '@/modules/contacts/contacts.routes';
 import { conversationsRouter } from '@/modules/conversations/conversations.routes';
@@ -57,8 +60,16 @@ export function createApp(): Express {
   });
 
   app.use('/healthz', healthRouter);
-  app.use('/contacts', apiLimiter, requireAuth, contactsRouter);
-  app.use('/conversations', apiLimiter, requireAuth, conversationsRouter);
+  const requireActiveUser = createRequireActiveUser();
+
+  app.use('/contacts', apiLimiter, requireAuth, requireActiveUser, contactsRouter);
+  app.use(
+    '/conversations',
+    apiLimiter,
+    requireAuth,
+    requireActiveUser,
+    conversationsRouter,
+  );
   app.use('/webhooks', webhookLimiter, webhooksRouter);
 
   app.use(notFoundHandler);
