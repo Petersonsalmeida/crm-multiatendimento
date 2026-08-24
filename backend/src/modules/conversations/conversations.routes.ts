@@ -16,3 +16,6 @@ conversationsRouter.get(
   '/:id/messages',
   asyncHandler(messages.listByConversation),
 );
+
+// Envio pelo agente: persiste só depois que a Evolution confirma.
+conversationsRouter.post('/:id/messages', asyncHandler(messages.send));

@@ -51,6 +51,15 @@ export interface PersistInboundInput {
 }
 
 // ---------------------------------------------------------------------
+// Envio — corpo de POST /conversations/:id/messages
+// ---------------------------------------------------------------------
+export const sendMessageBodySchema = z.object({
+  // 4096 é o limite de texto de uma mensagem do WhatsApp.
+  text: z.string().trim().min(1, 'Mensagem vazia').max(4096),
+});
+export type SendMessageBody = z.infer<typeof sendMessageBodySchema>;
+
+// ---------------------------------------------------------------------
 // Listagem — query params de GET /conversations/:id/messages
 // ---------------------------------------------------------------------
 export const listMessagesQuerySchema = z.object({

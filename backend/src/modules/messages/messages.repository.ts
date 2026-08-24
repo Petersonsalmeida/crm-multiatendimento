@@ -21,12 +21,23 @@ export interface InsertInboundArgs {
   sent_at: string;
 }
 
+export interface InsertOutboundArgs {
+  conversation_id: string;
+  external_id: string | null;
+  kind: MessageKind;
+  content: string | null;
+  sent_by: string | null;
+  from_bot: boolean;
+  sent_at: string;
+}
+
 export interface MessagesRepository {
   listByConversation(
     args: ListByConversationArgs,
   ): Promise<{ items: MessageRow[]; total: number }>;
   findByExternalId(externalId: string): Promise<MessageRow | null>;
   insertInbound(args: InsertInboundArgs): Promise<MessageRow>;
+  insertOutbound(args: InsertOutboundArgs): Promise<MessageRow>;
 }
 
 export function createMessagesRepository(
@@ -62,6 +73,16 @@ export function createMessagesRepository(
       const { data, error } = await client
         .from(TABLE)
         .insert({ ...args, direction: 'inbound', from_bot: false })
+        .select('*')
+        .single();
+      if (error) throw error;
+      return data as MessageRow;
+    },
+
+    async insertOutbound(args) {
+      const { data, error } = await client
+        .from(TABLE)
+        .insert({ ...args, direction: 'outbound' })
         .select('*')
         .single();
       if (error) throw error;
