@@ -5,7 +5,10 @@ import {
   normalizePhone,
   normalizeTags,
 } from '@/modules/contacts/contacts.service';
-import type { ContactsRepository } from '@/modules/contacts/contacts.repository';
+import {
+  sanitizeSearchTerm,
+  type ContactsRepository,
+} from '@/modules/contacts/contacts.repository';
 import type { ContactRow } from '@/modules/contacts/contacts.types';
 
 // ---------------------------------------------------------------------
@@ -75,6 +78,24 @@ describe('normalizeTags', () => {
 
   it('ignora strings vazias depois do trim', () => {
     expect(normalizeTags(['  ', 'ok'])).toEqual(['ok']);
+  });
+});
+
+describe('sanitizeSearchTerm', () => {
+  it('remove caracteres da gramática do .or() do PostgREST', () => {
+    expect(sanitizeSearchTerm('joão,phone.eq.(x)')).toBe('joãophone.eq.x');
+  });
+
+  it('remove wildcards de LIKE para busca literal', () => {
+    expect(sanitizeSearchTerm('50%_off')).toBe('50off');
+  });
+
+  it('preserva texto comum, inclusive acentos e telefone', () => {
+    expect(sanitizeSearchTerm('+5551 João')).toBe('+5551 João');
+  });
+
+  it('retorna vazio quando só sobra lixo', () => {
+    expect(sanitizeSearchTerm('%(",_)\'')).toBe('');
   });
 });
 

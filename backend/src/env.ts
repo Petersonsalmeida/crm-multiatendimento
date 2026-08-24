@@ -13,12 +13,23 @@ const optionalString = () =>
 const optionalUrl = () =>
   optionalString().pipe(z.string().url().optional());
 
+// `CORS_ORIGINS` é uma lista separada por vírgula (ex.:
+// "https://crm.centroautoalianca.com.br,http://localhost:5173").
+export function parseCorsOrigins(raw: string | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
+    .filter((origin) => origin.length > 0);
+}
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+
+  CORS_ORIGINS: optionalString(),
 
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_KEY: z.string().min(10),
@@ -40,7 +51,35 @@ const schema = z.object({
   JWT_SECRET: z.string().min(10),
 });
 
-const parsed = schema.safeParse(process.env);
+// Em produção, configurações "convenientes pra dev" viram erro de boot:
+// melhor o processo se recusar a subir do que subir aberto.
+export const envSchema = schema.superRefine((value, ctx) => {
+  if (value.NODE_ENV !== 'production') return;
+
+  if (!value.EVOLUTION_WEBHOOK_SECRET) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['EVOLUTION_WEBHOOK_SECRET'],
+      message: 'obrigatório em produção (webhook aberto sem ele)',
+    });
+  }
+  if (parseCorsOrigins(value.CORS_ORIGINS).length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['CORS_ORIGINS'],
+      message: 'obrigatório em produção (allowlist de origens do frontend)',
+    });
+  }
+  if (value.JWT_SECRET === 'change-this-in-production') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['JWT_SECRET'],
+      message: 'troque o valor placeholder do .env.example',
+    });
+  }
+});
+
+const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
   const details = parsed.error.issues

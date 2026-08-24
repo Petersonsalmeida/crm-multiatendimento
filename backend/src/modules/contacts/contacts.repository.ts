@@ -9,6 +9,14 @@ import type {
 
 const TABLE = 'contacts';
 
+// O `.or()` do PostgREST interpreta `,`, `(` e `)` como parte da gramática
+// do filtro — input do usuário com esses caracteres mudaria a semântica da
+// query. Removemos também aspas e wildcards de LIKE (`%`, `_`) para que a
+// busca trate o termo como texto literal.
+export function sanitizeSearchTerm(raw: string): string {
+  return raw.replace(/[,()"'%_\\]/g, '').trim();
+}
+
 export interface ContactsRepository {
   list(query: ListContactsQuery): Promise<{ items: ContactRow[]; total: number }>;
   findById(id: string): Promise<ContactRow | null>;
@@ -34,9 +42,10 @@ export function createContactsRepository(
 
       if (query.status) q = q.eq('status', query.status);
       if (query.tag) q = q.contains('tags', [query.tag]);
-      if (query.search) {
+      const search = query.search ? sanitizeSearchTerm(query.search) : '';
+      if (search) {
         // Busca simples em name, phone ou company
-        const term = `%${query.search}%`;
+        const term = `%${search}%`;
         q = q.or(`name.ilike.${term},phone.ilike.${term},company.ilike.${term}`);
       }
 
