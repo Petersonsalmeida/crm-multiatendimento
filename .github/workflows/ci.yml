@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main, dev]
 
+# Node 22: a 20 saiu de suporte em abril/2026 e é a mesma major das
+# imagens Docker, para que "passou no CI" signifique o mesmo runtime
+# que roda em produção.
+env:
+  NODE_VERSION: 22
+
 jobs:
   backend:
     name: Backend (typecheck + testes + build)
@@ -17,13 +23,38 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # Compilar não prova que roda: os aliases `@/` só viram caminhos
+      # resolvíveis depois do tsc-alias. Este passo pega a regressão.
+      - name: Servidor sobe e responde em /healthz
+        run: |
+          node dist/server.js &
+          SERVER_PID=$!
+          for i in $(seq 1 15); do
+            if curl -sf http://127.0.0.1:3001/healthz > /dev/null; then
+              echo "healthz OK"
+              kill $SERVER_PID
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "backend não respondeu em /healthz"
+          kill $SERVER_PID 2>/dev/null
+          exit 1
+        env:
+          NODE_ENV: development
+          PORT: 3001
+          SUPABASE_URL: https://example.supabase.co
+          SUPABASE_SERVICE_KEY: ci-service-key-1234567890
+          SUPABASE_JWT_SECRET: ci-jwt-secret-1234567890
+          JWT_SECRET: ci-app-secret-1234567890
+          LOG_LEVEL: silent
 
   frontend:
     name: Frontend (typecheck + build)
@@ -35,8 +66,70 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run build
+
+  docker:
+    name: Imagens Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build da imagem do backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          load: true
+          tags: alianca-crm-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build da imagem do frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          load: true
+          tags: alianca-crm-frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_API_URL=https://example.invalid/api
+            VITE_SUPABASE_URL=https://example.supabase.co
+            VITE_SUPABASE_ANON_KEY=ci-anon-key
+
+      # Sobe os containers de verdade: valida CMD, permissões do usuário
+      # `node` e o fallback de SPA do Nginx — coisas que o build sozinho
+      # não exercita.
+      - name: Containers sobem e respondem
+        run: |
+          docker run -d --name be -p 3001:3001 \
+            -e SUPABASE_URL=https://example.supabase.co \
+            -e SUPABASE_SERVICE_KEY=ci-service-key-1234567890 \
+            -e SUPABASE_JWT_SECRET=ci-jwt-secret-1234567890 \
+            -e JWT_SECRET=ci-app-secret-1234567890 \
+            -e CORS_ORIGINS=https://example.invalid \
+            -e EVOLUTION_WEBHOOK_SECRET=ci-webhook-secret \
+            -e LOG_LEVEL=silent \
+            alianca-crm-backend:ci
+          docker run -d --name fe -p 8080:80 alianca-crm-frontend:ci
+
+          for i in $(seq 1 20); do
+            curl -sf http://127.0.0.1:3001/healthz > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:3001/healthz || { docker logs be; exit 1; }
+
+          # Rota sem token precisa ser recusada.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3001/contacts)
+          [ "$code" = "401" ] || { echo "esperava 401 em /contacts, veio $code"; exit 1; }
+
+          # Rota de SPA inexistente deve devolver o index.html, não 404.
+          curl -sf http://127.0.0.1:8080/login > /dev/null || { docker logs fe; exit 1; }
+
+          docker rm -f be fe
