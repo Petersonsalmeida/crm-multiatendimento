@@ -3,6 +3,7 @@ import { SignJWT } from 'jose';
 import { describe, expect, it, vi } from 'vitest';
 import { AppError } from '@/shared/errors';
 import {
+  createRequireActiveUser,
   createRequireRole,
   requireAuth,
 } from '@/modules/auth/auth.middleware';
@@ -123,15 +124,52 @@ describe('requireAuth', () => {
   });
 });
 
+function makeAuthedReq(): Request {
+  const req = makeReq();
+  req.auth = { userId: USER_ID };
+  return req;
+}
+
+// ---------------------------------------------------------------------
+// createRequireActiveUser — JWT válido não basta, precisa estar ativo
+// ---------------------------------------------------------------------
+describe('createRequireActiveUser', () => {
+  it('usuário ativo passa e fica disponível em req.authUser', async () => {
+    const user = makeUser();
+    const middleware = createRequireActiveUser(makeAuthRepoMock(user));
+    const req = makeAuthedReq();
+
+    const { error } = await run(middleware, req);
+
+    expect(error).toBeUndefined();
+    expect(req.authUser).toEqual(user);
+  });
+
+  it('barra cadastro novo ainda inativo com 403', async () => {
+    const middleware = createRequireActiveUser(
+      makeAuthRepoMock(makeUser({ is_active: false })),
+    );
+    const { error } = await run(middleware, makeAuthedReq());
+    expect(error).toMatchObject({ statusCode: 403, code: 'auth_user_inactive' });
+  });
+
+  it('barra JWT válido sem linha em public.users', async () => {
+    const middleware = createRequireActiveUser(makeAuthRepoMock(null));
+    const { error } = await run(middleware, makeAuthedReq());
+    expect(error).toMatchObject({ statusCode: 403, code: 'auth_user_inactive' });
+  });
+
+  it('sem requireAuth antes (req.auth vazio) responde 401', async () => {
+    const middleware = createRequireActiveUser(makeAuthRepoMock(makeUser()));
+    const { error } = await run(middleware, makeReq());
+    expect(error).toMatchObject({ statusCode: 401, code: 'auth_missing_token' });
+  });
+});
+
 // ---------------------------------------------------------------------
 // createRequireRole — autorização via public.users
 // ---------------------------------------------------------------------
 describe('createRequireRole', () => {
-  function makeAuthedReq(): Request {
-    const req = makeReq();
-    req.auth = { userId: USER_ID };
-    return req;
-  }
 
   it('admin passa na exigência de admin', async () => {
     const middleware = createRequireRole(
@@ -167,5 +205,17 @@ describe('createRequireRole', () => {
     const middleware = createRequireRole('admin', makeAuthRepoMock(makeUser()));
     const { error } = await run(middleware, makeReq());
     expect(error).toMatchObject({ statusCode: 401, code: 'auth_missing_token' });
+  });
+
+  it('reaproveita req.authUser sem consultar o repositório de novo', async () => {
+    const repo = makeAuthRepoMock(null);
+    const middleware = createRequireRole('admin', repo);
+    const req = makeAuthedReq();
+    req.authUser = makeUser({ role: 'admin' });
+
+    const { error } = await run(middleware, req);
+
+    expect(error).toBeUndefined();
+    expect(repo.findUserById).not.toHaveBeenCalled();
   });
 });
