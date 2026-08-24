@@ -77,6 +77,7 @@ function makeServiceMocks() {
   const messages: MessagesService = {
     listByConversation: vi.fn(),
     persistInbound: vi.fn(),
+    sendText: vi.fn(),
   };
   return { contacts, conversations, messages };
 }
